@@ -17,6 +17,7 @@ Windows desktop overlay translator for games and visual novels. Select an area o
 
 - Screen-region OCR with Google Cloud Vision
 - Translation overlay bubbles that can be moved and resized
+- English and Thai app UI language selection
 - Global hotkeys:
   - `F9`: select an area to OCR and translate
   - `Esc`: hide translation overlays
@@ -230,6 +231,7 @@ The app has a built-in fallback dark theme. On newer Python versions, `pyqtdarkt
 
 - อ่านข้อความจากพื้นที่ที่เลือกบนหน้าจอด้วย Google Cloud Vision
 - แสดงคำแปลเป็นกล่อง Overlay ที่ย้ายตำแหน่งและปรับขนาดได้
+- เลือกภาษา UI ของโปรแกรมได้ทั้ง English และไทย
 - ปุ่มลัดใช้งานได้ทั่วระบบ:
   - `F9`: เลือกพื้นที่เพื่ออ่าน OCR และแปล
   - `Esc`: ซ่อนกล่องคำแปล

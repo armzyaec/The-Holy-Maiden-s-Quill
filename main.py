@@ -53,6 +53,7 @@ GOOGLE_CREDENTIALS_ENV = "GOOGLE_APPLICATION_CREDENTIALS"
 LOCAL_CREDENTIALS_NAME = "google_credentials.json"
 LOCAL_CREDENTIALS_PATTERNS = (LOCAL_CREDENTIALS_NAME, "translate-*.json")
 GOOGLE_SERVICE_ACCOUNTS_URL = "https://console.cloud.google.com/iam-admin/serviceaccounts"
+DEFAULT_UI_LANGUAGE = "en"
 USER_DATA_DIR_NAME = "user_data"
 CREDENTIALS_DIR_NAME = "credentials"
 OVERLAY_MARGIN = 8
@@ -76,6 +77,119 @@ LANG_MAP = {
     "KR": {"code": "ko", "name": "Korean"},
     "CH": {"code": "zh", "name": "Chinese"},
 }
+
+UI_TEXT = {
+    "en": {
+        "ui_language": "UI language:",
+        "first_run_title": "Readiness Check",
+        "first_run_heading": "What the app needs before translating",
+        "first_run_description": (
+            "The app uses Google Cloud Vision for OCR screen reading and the selected "
+            "translation engine for translating text."
+        ),
+        "skip_ready": "Do not show this again when required items are ready",
+        "credentials_help_button": "How to get Google file",
+        "select_area_hint": "Press F9 to select an area | Press Esc to hide translations",
+        "select_area_button": "Select area to translate (F9)",
+        "continuous_mode": "Continuous mode: watch the latest area",
+        "engine_label": "Translation engine:",
+        "source_label": "Source language:",
+        "target_label": "Target language:",
+        "api_key_placeholder": "Enter API key...",
+        "show_key": "Show key",
+        "font_size_label": "Translation text size:",
+        "opacity_label": "Translation background opacity:",
+        "latest_log": "Latest translations",
+        "credential_ready": "Google credential: ready ({name})",
+        "credential_missing": "Google credential: not set. Click Import google_credentials.json",
+        "settings_saved": "Settings saved",
+        "log_heading": "Full page translation [engine: {engine}]:",
+        "log_original": "Original",
+        "log_translation": "Translation",
+        "check_credential_title": "Google Cloud Vision credential for OCR",
+        "check_credential_ready": "Ready",
+        "check_credential_missing": "Import google_credentials.json or place it in user_data/credentials",
+        "check_engine_title": "Translation engine",
+        "check_api_key_title": "Translation engine API key",
+        "check_api_not_required": "Not required for this engine",
+        "check_api_ready": "API key entered",
+        "check_api_missing": "API key is missing",
+        "check_gateway": "Start your API Gateway at http://localhost:3000",
+        "check_language_title": "Source / target language",
+        "check_cache_title": "Translation cache",
+        "check_cache_detail": f"{TRANSLATION_CACHE_FILE} will be created automatically",
+        "check_hotkeys_title": "Hotkeys",
+        "check_hotkeys_detail": "F9 selects an area, Esc hides translations",
+        "check_needs_setup": "Needs setup",
+        "continuous_watching": "Continuous mode is watching the selected area",
+        "continuous_needs_area": "Continuous mode needs a selected area",
+        "continuous_stopped": "Continuous mode stopped",
+        "new_area_queued": "New area queued",
+        "reading_translating": "Reading and translating...",
+        "no_text_found": "No text found",
+        "translation_failed": "Translation failed",
+        "translated_status": "Translated | scene history: {count}/{limit}",
+    },
+    "th": {
+        "ui_language": "ภาษา UI:",
+        "first_run_title": "ตรวจความพร้อมก่อนใช้งาน",
+        "first_run_heading": "สิ่งที่โปรแกรมต้องการก่อนเริ่มแปล",
+        "first_run_description": (
+            "โปรแกรมต้องใช้ Google Cloud Vision สำหรับ OCR อ่านภาพหน้าจอ "
+            "และใช้ engine ที่เลือกไว้สำหรับแปลข้อความ"
+        ),
+        "skip_ready": "ไม่ต้องแสดงหน้านี้อีก ถ้าของจำเป็นพร้อมแล้ว",
+        "credentials_help_button": "วิธีเอาไฟล์ Google",
+        "select_area_hint": "กด F9 เพื่อเลือกพื้นที่ | กด Esc เพื่อซ่อนคำแปล",
+        "select_area_button": "เลือกพื้นที่เพื่อแปล (F9)",
+        "continuous_mode": "Continuous mode: ดูพื้นที่ล่าสุดซ้ำ",
+        "engine_label": "ระบบแปลภาษา:",
+        "source_label": "ภาษาต้นทาง:",
+        "target_label": "ภาษาปลายทาง:",
+        "api_key_placeholder": "ใส่ API Key...",
+        "show_key": "แสดงคีย์",
+        "font_size_label": "ขนาดตัวอักษรคำแปล:",
+        "opacity_label": "ความทึบพื้นหลังคำแปล:",
+        "latest_log": "บันทึกคำแปลล่าสุด",
+        "credential_ready": "Google credential: พร้อมใช้งาน ({name})",
+        "credential_missing": "Google credential: ยังไม่ได้ตั้งค่า กด Import google_credentials.json",
+        "settings_saved": "บันทึกการตั้งค่าแล้ว",
+        "log_heading": "แปลทั้งหน้า [ใช้ระบบ: {engine}]:",
+        "log_original": "ต้นฉบับ",
+        "log_translation": "คำแปล",
+        "check_credential_title": "Google Cloud Vision credential สำหรับ OCR",
+        "check_credential_ready": "พร้อม",
+        "check_credential_missing": "นำเข้า google_credentials.json หรือวางใน user_data/credentials",
+        "check_engine_title": "Translation engine",
+        "check_api_key_title": "API key ของ engine แปล",
+        "check_api_not_required": "ไม่จำเป็นสำหรับ engine นี้",
+        "check_api_ready": "ใส่ API key แล้ว",
+        "check_api_missing": "ยังไม่ได้ใส่ API key",
+        "check_gateway": "ต้องเปิด API Gateway ที่ http://localhost:3000",
+        "check_language_title": "ภาษาต้นทาง / ภาษาปลายทาง",
+        "check_cache_title": "Cache คำแปล",
+        "check_cache_detail": f"จะสร้าง {TRANSLATION_CACHE_FILE} ให้อัตโนมัติ",
+        "check_hotkeys_title": "ปุ่มลัด",
+        "check_hotkeys_detail": "F9 เลือกพื้นที่, Esc ซ่อนคำแปล",
+        "check_needs_setup": "ต้องตั้งค่า",
+        "continuous_watching": "Continuous mode กำลังดูพื้นที่ที่เลือก",
+        "continuous_needs_area": "Continuous mode ต้องเลือกพื้นที่ก่อน",
+        "continuous_stopped": "หยุด Continuous mode แล้ว",
+        "new_area_queued": "เพิ่มพื้นที่ใหม่เข้าคิวแล้ว",
+        "reading_translating": "กำลังอ่านและแปล...",
+        "no_text_found": "ไม่พบข้อความ",
+        "translation_failed": "แปลไม่สำเร็จ",
+        "translated_status": "แปลแล้ว | ประวัติฉาก: {count}/{limit}",
+    },
+}
+
+
+def ui_text(language, key, **kwargs):
+    text = UI_TEXT.get(language, UI_TEXT[DEFAULT_UI_LANGUAGE]).get(
+        key,
+        UI_TEXT[DEFAULT_UI_LANGUAGE].get(key, key),
+    )
+    return text.format(**kwargs) if kwargs else text
 
 
 @dataclass
@@ -169,17 +283,17 @@ def find_local_credentials():
 def validate_google_credentials_file(path):
     data = load_json_file(path, default=None)
     if not isinstance(data, dict):
-        raise ValueError("ไฟล์นี้ไม่ใช่ JSON credential ที่ถูกต้อง")
+        raise ValueError("This file is not a valid JSON credential file.")
 
     required_fields = ("type", "project_id", "private_key", "client_email")
     missing_fields = [field for field in required_fields if not data.get(field)]
     if missing_fields:
         raise ValueError(
-            "ไฟล์ credential ขาดข้อมูลสำคัญ: " + ", ".join(missing_fields)
+            "The credential file is missing required fields: " + ", ".join(missing_fields)
         )
 
     if data.get("type") != "service_account":
-        raise ValueError("ไฟล์นี้ต้องเป็น Google service account key แบบ JSON")
+        raise ValueError("This file must be a Google service account JSON key.")
 
 
 def import_google_credentials_file(source_path):
@@ -192,34 +306,49 @@ def import_google_credentials_file(source_path):
     return target
 
 
-def google_credentials_help_text():
+def google_credentials_help_text(language=DEFAULT_UI_LANGUAGE):
+    if language == "th":
+        return (
+            "วิธีเอา google_credentials.json:\n\n"
+            "1. เข้า Google Cloud Console\n"
+            "2. เลือกโปรเจกต์ที่เปิด Billing แล้ว\n"
+            "3. เปิด Cloud Vision API ในโปรเจกต์นั้น\n"
+            "4. ไปที่ IAM & Admin > Service Accounts\n"
+            "5. สร้างหรือเลือก Service Account\n"
+            "6. เข้าแท็บ Keys > Add key > Create new key\n"
+            "7. เลือก JSON แล้วกด Create\n"
+            "8. นำไฟล์ .json ที่ดาวน์โหลดมา Import ในโปรแกรม\n\n"
+            f"หน้าที่ใช้สร้าง Service Account:\n{GOOGLE_SERVICE_ACCOUNTS_URL}\n\n"
+            "หมายเหตุ: เก็บไฟล์นี้เป็นความลับ ห้ามอัปขึ้น GitHub หรือส่งให้คนอื่น"
+        )
+
     return (
-        "วิธีเอา google_credentials.json:\n\n"
-        "1. เข้า Google Cloud Console\n"
-        "2. เลือกโปรเจกต์ที่เปิด Billing แล้ว\n"
-        "3. เปิด Cloud Vision API ในโปรเจกต์นั้น\n"
-        "4. ไปที่ IAM & Admin > Service Accounts\n"
-        "5. สร้างหรือเลือก Service Account\n"
-        "6. เข้าแท็บ Keys > Add key > Create new key\n"
-        "7. เลือก JSON แล้วกด Create\n"
-        "8. จะได้ไฟล์ .json ดาวน์โหลดลงเครื่อง ให้นำไฟล์นั้นมา Import ในโปรแกรม\n\n"
-        f"หน้าที่ใช้สร้าง Service Account:\n{GOOGLE_SERVICE_ACCOUNTS_URL}\n\n"
-        "หมายเหตุ: เก็บไฟล์นี้เป็นความลับ ห้ามอัปขึ้น GitHub หรือส่งให้คนอื่น"
+        "How to get google_credentials.json:\n\n"
+        "1. Open Google Cloud Console\n"
+        "2. Select a project with billing enabled\n"
+        "3. Enable Cloud Vision API for that project\n"
+        "4. Go to IAM & Admin > Service Accounts\n"
+        "5. Create or select a service account\n"
+        "6. Open Keys > Add key > Create new key\n"
+        "7. Select JSON, then click Create\n"
+        "8. Import the downloaded .json file in this app\n\n"
+        f"Service Accounts page:\n{GOOGLE_SERVICE_ACCOUNTS_URL}\n\n"
+        "Keep this file secret. Do not upload it to GitHub or share it with others."
     )
 
 
-def show_google_credentials_help():
+def show_google_credentials_help(parent=None, language=DEFAULT_UI_LANGUAGE):
     QMessageBox.information(
-        None,
-        "วิธีเอา google_credentials.json",
-        google_credentials_help_text(),
+        parent,
+        "วิธีเอา google_credentials.json" if language == "th" else "How to get google_credentials.json",
+        google_credentials_help_text(language),
     )
 
 
-def import_google_credentials_with_dialog(parent=None):
+def import_google_credentials_with_dialog(parent=None, language=DEFAULT_UI_LANGUAGE):
     source_path, _ = QFileDialog.getOpenFileName(
         parent,
-        "เลือกไฟล์ Google service account JSON",
+        "เลือกไฟล์ Google service account JSON" if language == "th" else "Select Google service account JSON",
         str(Path.home() / "Downloads"),
         "JSON files (*.json);;All files (*.*)",
     )
@@ -231,15 +360,19 @@ def import_google_credentials_with_dialog(parent=None):
     except Exception as exc:
         QMessageBox.critical(
             parent,
-            "Import credential ไม่สำเร็จ",
-            f"{exc}\n\n{google_credentials_help_text()}",
+            "Import credential ไม่สำเร็จ" if language == "th" else "Credential import failed",
+            f"{exc}\n\n{google_credentials_help_text(language)}",
         )
         return False
 
     QMessageBox.information(
         parent,
-        "Import credential สำเร็จ",
-        f"นำเข้าไฟล์เรียบร้อยแล้ว:\n{target}\n\nโปรแกรมจะใช้ไฟล์นี้สำหรับ Google Cloud Vision OCR",
+        "Import credential สำเร็จ" if language == "th" else "Credential imported",
+        (
+            f"นำเข้าไฟล์เรียบร้อยแล้ว:\n{target}\n\nโปรแกรมจะใช้ไฟล์นี้สำหรับ Google Cloud Vision OCR"
+            if language == "th"
+            else f"Imported successfully:\n{target}\n\nThe app will use this file for Google Cloud Vision OCR."
+        ),
     )
     return True
 
@@ -713,51 +846,52 @@ def startup_check_items(control_panel):
     )
 
     api_ready = True
-    api_detail = "ไม่จำเป็นสำหรับ engine นี้"
+    api_detail = control_panel.t("check_api_not_required")
     if settings.engine_index in (1, 2, 3):
         api_ready = bool(settings.api_key)
-        api_detail = "ใส่ API key แล้ว" if api_ready else "ยังไม่ได้ใส่ API key"
+        api_detail = control_panel.t("check_api_ready") if api_ready else control_panel.t("check_api_missing")
     elif settings.engine_index == 4:
-        api_detail = "ต้องเปิด API Gateway ที่ http://localhost:3000 เอง"
+        api_detail = control_panel.t("check_gateway")
 
     return [
         (
             credential_ready,
-            "Google Cloud Vision credential สำหรับ OCR",
-            "พร้อม" if credential_ready else "วาง google_credentials.json หรือ translate-*.json ใน user_data/credentials",
+            control_panel.t("check_credential_title"),
+            control_panel.t("check_credential_ready") if credential_ready else control_panel.t("check_credential_missing"),
         ),
         (
             True,
-            "Translation engine",
+            control_panel.t("check_engine_title"),
             settings.engine_name,
         ),
         (
             api_ready,
-            "API key ของ engine แปล",
+            control_panel.t("check_api_key_title"),
             api_detail,
         ),
         (
             True,
-            "ภาษาต้นทาง / ภาษาปลายทาง",
+            control_panel.t("check_language_title"),
             f"{settings.source_label} -> {settings.target_name}",
         ),
         (
             True,
-            "Cache คำแปล",
-            f"จะสร้าง {TRANSLATION_CACHE_FILE} ให้อัตโนมัติ",
+            control_panel.t("check_cache_title"),
+            control_panel.t("check_cache_detail"),
         ),
         (
             True,
-            "ปุ่มลัด",
-            "F9 เลือกพื้นที่, Esc ซ่อนคำแปล",
+            control_panel.t("check_hotkeys_title"),
+            control_panel.t("check_hotkeys_detail"),
         ),
     ]
 
 
 def build_startup_checklist_html(control_panel):
     rows = []
+    language = control_panel.current_ui_language()
     for ok, title, detail in startup_check_items(control_panel):
-        icon = "OK" if ok else "ต้องตั้งค่า"
+        icon = "OK" if ok else ui_text(language, "check_needs_setup")
         color = "#8fd694" if ok else "#ffb86b"
         rows.append(
             f'<p style="margin:6px 0;"><b style="color:{color};">{escape(icon)}</b> '
@@ -985,23 +1119,20 @@ class FirstRunDialog(QDialog):
     def __init__(self, control_panel, parent=None):
         super().__init__(parent)
         self.control_panel = control_panel
-        self.setWindowTitle("ตรวจความพร้อมก่อนใช้งาน")
+        self.setWindowTitle(self.control_panel.t("first_run_title"))
         self.setMinimumWidth(560)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
-        title = QLabel("สิ่งที่โปรแกรมต้องการก่อนเริ่มแปล")
-        title.setFont(QFont("Segoe UI", 13, QFont.Bold))
-        layout.addWidget(title)
+        self.title_label = QLabel()
+        self.title_label.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        layout.addWidget(self.title_label)
 
-        description = QLabel(
-            "โปรแกรมต้องใช้ Google Cloud Vision สำหรับ OCR อ่านภาพหน้าจอ "
-            "และใช้ engine ที่เลือกไว้สำหรับแปลข้อความ"
-        )
-        description.setWordWrap(True)
-        layout.addWidget(description)
+        self.description_label = QLabel()
+        self.description_label.setWordWrap(True)
+        layout.addWidget(self.description_label)
 
         self.checklist_label = QLabel()
         self.checklist_label.setTextFormat(Qt.RichText)
@@ -1010,12 +1141,12 @@ class FirstRunDialog(QDialog):
 
         credential_actions = QHBoxLayout()
         self.import_credentials_button = QPushButton("Import google_credentials.json")
-        self.credentials_help_button = QPushButton("วิธีเอาไฟล์จาก Google Cloud")
+        self.credentials_help_button = QPushButton()
         credential_actions.addWidget(self.import_credentials_button)
         credential_actions.addWidget(self.credentials_help_button)
         layout.addLayout(credential_actions)
 
-        self.skip_checkbox = QCheckBox("ไม่ต้องแสดงหน้านี้อีก ถ้าของจำเป็นพร้อมแล้ว")
+        self.skip_checkbox = QCheckBox()
         layout.addWidget(self.skip_checkbox)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok)
@@ -1023,17 +1154,28 @@ class FirstRunDialog(QDialog):
         layout.addWidget(buttons)
 
         self.import_credentials_button.clicked.connect(self.import_credentials)
-        self.credentials_help_button.clicked.connect(show_google_credentials_help)
+        self.credentials_help_button.clicked.connect(
+            lambda: show_google_credentials_help(self, self.control_panel.current_ui_language())
+        )
+        self.apply_language()
         self.refresh()
 
+    def apply_language(self):
+        self.setWindowTitle(self.control_panel.t("first_run_title"))
+        self.title_label.setText(self.control_panel.t("first_run_heading"))
+        self.description_label.setText(self.control_panel.t("first_run_description"))
+        self.credentials_help_button.setText(self.control_panel.t("credentials_help_button"))
+        self.skip_checkbox.setText(self.control_panel.t("skip_ready"))
+
     def refresh(self):
+        self.apply_language()
         self.checklist_label.setText(build_startup_checklist_html(self.control_panel))
 
     def should_skip_next_time(self):
         return self.skip_checkbox.isChecked()
 
     def import_credentials(self):
-        if import_google_credentials_with_dialog(self):
+        if import_google_credentials_with_dialog(self, self.control_panel.current_ui_language()):
             self.refresh()
             if hasattr(self.control_panel, "refresh_credentials_status"):
                 self.control_panel.refresh_credentials_status()
@@ -1086,6 +1228,14 @@ class ControlPanelWindow(QWidget):
         self.settings_layout = QFormLayout(self.settings_widget)
         self.settings_layout.setContentsMargins(0, 0, 0, 0)
         self.settings_layout.setSpacing(10)
+        self.settings_labels = {}
+
+        self.ui_language_combo = QComboBox()
+        self.ui_language_combo.addItem("English", "en")
+        self.ui_language_combo.addItem("ไทย", "th")
+        self.ui_language_combo.setFont(QFont("Segoe UI", 10))
+        self.settings_layout.addRow("UI language:", self.ui_language_combo)
+        self.settings_labels["ui_language"] = self.settings_layout.labelForField(self.ui_language_combo)
 
         self.engine_combo = QComboBox()
         self.engine_combo.addItems([
@@ -1097,16 +1247,19 @@ class ControlPanelWindow(QWidget):
         ])
         self.engine_combo.setFont(QFont("Segoe UI", 10))
         self.settings_layout.addRow("ระบบแปลภาษา:", self.engine_combo)
+        self.settings_labels["engine_label"] = self.settings_layout.labelForField(self.engine_combo)
 
         self.source_lang_combo = QComboBox()
         self.source_lang_combo.addItems(["AUTO", "JP", "EN", "KR", "CH", "TH"])
         self.source_lang_combo.setFont(QFont("Segoe UI", 10))
         self.settings_layout.addRow("ภาษาต้นทาง:", self.source_lang_combo)
+        self.settings_labels["source_label"] = self.settings_layout.labelForField(self.source_lang_combo)
 
         self.lang_combo = QComboBox()
         self.lang_combo.addItems(["TH", "EN", "JP", "KR", "CH"])
         self.lang_combo.setFont(QFont("Segoe UI", 10))
         self.settings_layout.addRow("ภาษาปลายทาง:", self.lang_combo)
+        self.settings_labels["target_label"] = self.settings_layout.labelForField(self.lang_combo)
 
         self.api_key_input = QLineEdit()
         self.api_key_input.setPlaceholderText("ใส่ API Key...")
@@ -1125,6 +1278,7 @@ class ControlPanelWindow(QWidget):
         key_layout.addWidget(self.api_key_input)
         key_layout.addWidget(self.show_key_checkbox)
         self.settings_layout.addRow("API Key:", key_layout)
+        self.settings_labels["api_key"] = self.settings_layout.labelForField(key_layout)
 
         self.overlay_font_size_input = QSpinBox()
         self.overlay_font_size_input.setRange(9, 32)
@@ -1133,6 +1287,7 @@ class ControlPanelWindow(QWidget):
         self.overlay_font_size_input.setSuffix(" px")
         self.overlay_font_size_input.setFont(QFont("Segoe UI", 10))
         self.settings_layout.addRow("ขนาดตัวอักษรคำแปล:", self.overlay_font_size_input)
+        self.settings_labels["font_size_label"] = self.settings_layout.labelForField(self.overlay_font_size_input)
 
         opacity_layout = QHBoxLayout()
         self.overlay_opacity_slider = QSlider(Qt.Horizontal)
@@ -1145,6 +1300,7 @@ class ControlPanelWindow(QWidget):
         opacity_layout.addWidget(self.overlay_opacity_slider)
         opacity_layout.addWidget(self.overlay_opacity_value_label)
         self.settings_layout.addRow("ความทึบพื้นหลังคำแปล:", opacity_layout)
+        self.settings_labels["opacity_label"] = self.settings_layout.labelForField(opacity_layout)
 
         self.layout.addWidget(self.settings_widget)
 
@@ -1163,6 +1319,8 @@ class ControlPanelWindow(QWidget):
         self.layout.addWidget(self.log_display)
 
         # Connect settings events and load existing config
+        self.ui_language_combo.currentIndexChanged.connect(self.apply_ui_language)
+        self.ui_language_combo.currentIndexChanged.connect(self.save_settings)
         self.engine_combo.currentIndexChanged.connect(self.toggle_api_key_visibility)
         self.engine_combo.currentIndexChanged.connect(self.save_settings)
         self.source_lang_combo.currentIndexChanged.connect(self.save_settings)
@@ -1172,7 +1330,9 @@ class ControlPanelWindow(QWidget):
         self.overlay_opacity_slider.valueChanged.connect(self.update_opacity_label)
         self.overlay_opacity_slider.valueChanged.connect(self.save_settings)
         self.import_credentials_button.clicked.connect(self.import_credentials)
-        self.credentials_help_button.clicked.connect(show_google_credentials_help)
+        self.credentials_help_button.clicked.connect(
+            lambda: show_google_credentials_help(self, self.current_ui_language())
+        )
         self.load_settings()
         self.refresh_credentials_status()
         self.is_loading = False
@@ -1185,6 +1345,7 @@ class ControlPanelWindow(QWidget):
                     data = json.load(f)
                     engine = data.get("engine", "google")
                     api_key = data.get("gemini_api_key", "")
+                    ui_language = data.get("ui_language", DEFAULT_UI_LANGUAGE)
                     source_lang = data.get("source_lang", "AUTO")
                     target_lang = data.get("target_lang", "TH")
                     overlay_font_size = clamp_int(
@@ -1206,6 +1367,10 @@ class ControlPanelWindow(QWidget):
                         self.engine_combo.setCurrentIndex(0)
                     self.api_key_input.setText(api_key)
 
+                    language_index = self.ui_language_combo.findData(ui_language)
+                    if language_index >= 0:
+                        self.ui_language_combo.setCurrentIndex(language_index)
+
                     source_index = self.source_lang_combo.findText(source_lang)
                     if source_index >= 0:
                         self.source_lang_combo.setCurrentIndex(source_index)
@@ -1220,6 +1385,7 @@ class ControlPanelWindow(QWidget):
                 logging.error(f"Failed to load settings: {e}")
         self.toggle_api_key_visibility()
         self.update_opacity_label()
+        self.apply_ui_language()
 
     def save_settings(self):
         config_path = user_data_path("config.json")
@@ -1237,6 +1403,7 @@ class ControlPanelWindow(QWidget):
             engine_name = "Google Translate (เดิม)"
             
         api_key = self.api_key_input.text().strip()
+        ui_language = self.current_ui_language()
         source_lang = self.source_lang_combo.currentText()
         target_lang = self.lang_combo.currentText()
         overlay_font_size = self.overlay_font_size_input.value()
@@ -1244,6 +1411,7 @@ class ControlPanelWindow(QWidget):
         data = {
             "engine": engine,
             "gemini_api_key": api_key,
+            "ui_language": ui_language,
             "source_lang": source_lang,
             "target_lang": target_lang,
             "overlay_font_size": overlay_font_size,
@@ -1255,7 +1423,7 @@ class ControlPanelWindow(QWidget):
                 json.dump(data, f, ensure_ascii=False, indent=4)
             os.replace(temp_path, config_path)
             if not getattr(self, "is_loading", False):
-                self.set_status(f"เปลี่ยนระบบแปลภาษาเป็น: {engine_name}")
+                self.set_status(self.t("settings_saved"))
                 self.overlay_style_changed.emit(self.current_overlay_style())
                 logging.info(f"Engine changed to: {engine_name}")
         except Exception as e:
@@ -1265,6 +1433,43 @@ class ControlPanelWindow(QWidget):
         needs_key = self.engine_combo.currentIndex() in (1, 2, 3)
         self.api_key_input.setEnabled(needs_key)
         self.show_key_checkbox.setEnabled(needs_key)
+
+    def current_ui_language(self):
+        return self.ui_language_combo.currentData() or DEFAULT_UI_LANGUAGE
+
+    def t(self, key, **kwargs):
+        return ui_text(self.current_ui_language(), key, **kwargs)
+
+    def apply_ui_language(self, *_):
+        if not hasattr(self, "info_label"):
+            return
+
+        self.info_label.setText(self.t("select_area_hint"))
+        self.crop_button.setText(self.t("select_area_button"))
+        self.credentials_help_button.setText(self.t("credentials_help_button"))
+        self.continuous_checkbox.setText(self.t("continuous_mode"))
+        self.api_key_input.setPlaceholderText(self.t("api_key_placeholder"))
+        self.show_key_checkbox.setText(self.t("show_key"))
+        self.title_label.setText(self.t("latest_log"))
+
+        label_map = {
+            "ui_language": "ui_language",
+            "engine_label": "engine_label",
+            "source_label": "source_label",
+            "target_label": "target_label",
+            "font_size_label": "font_size_label",
+            "opacity_label": "opacity_label",
+        }
+        for label_key, text_key in label_map.items():
+            label = self.settings_labels.get(label_key)
+            if label:
+                label.setText(self.t(text_key))
+
+        api_label = self.settings_labels.get("api_key")
+        if api_label:
+            api_label.setText("API Key:")
+
+        self.refresh_credentials_status()
 
     def current_translation_settings(self):
         engine_idx = self.engine_combo.currentIndex()
@@ -1303,15 +1508,15 @@ class ControlPanelWindow(QWidget):
 
         if active_path:
             self.credentials_status_label.setText(
-                f"Google credential: พร้อมใช้งาน ({active_path.name})"
+                self.t("credential_ready", name=active_path.name)
             )
         else:
             self.credentials_status_label.setText(
-                "Google credential: ยังไม่ได้ตั้งค่า กด Import google_credentials.json"
+                self.t("credential_missing")
             )
 
     def import_credentials(self):
-        if import_google_credentials_with_dialog(self):
+        if import_google_credentials_with_dialog(self, self.current_ui_language()):
             self.refresh_credentials_status()
 
     def add_page_to_log(self, regions):
@@ -1319,10 +1524,10 @@ class ControlPanelWindow(QWidget):
             return
 
         engine_name = self.engine_combo.currentText()
-        lines = [f"แปลทั้งหน้า [ใช้ระบบ: {engine_name}]:"]
+        lines = [self.t("log_heading", engine=engine_name)]
         for index, region in enumerate(regions, 1):
-            lines.append(f"{index}. ต้นฉบับ: {region.original}")
-            lines.append(f"   คำแปล: {region.translated}")
+            lines.append(f"{index}. {self.t('log_original')}: {region.original}")
+            lines.append(f"   {self.t('log_translation')}: {region.translated}")
         lines.append("-" * 50)
         log_entry = "\n".join(lines)
         self.log_display.append(log_entry)
@@ -1632,12 +1837,12 @@ class Controller:
         if enabled:
             self.continuous_timer.start()
             if self.active_crop_rect:
-                self.control_panel.set_status("Continuous mode is watching the selected area")
+                self.control_panel.set_status(self.control_panel.t("continuous_watching"))
             else:
-                self.control_panel.set_status("Continuous mode needs a selected area")
+                self.control_panel.set_status(self.control_panel.t("continuous_needs_area"))
         else:
             self.continuous_timer.stop()
-            self.control_panel.set_status("Continuous mode stopped")
+            self.control_panel.set_status(self.control_panel.t("continuous_stopped"))
 
     def set_translation_area(self, crop_rect):
         logging.info("Area selected: %s", crop_rect)
@@ -1649,7 +1854,7 @@ class Controller:
         self._last_pixels = None
         if self.translation_in_progress:
             self.pending_scan = True
-            self.control_panel.set_status("New area queued")
+            self.control_panel.set_status(self.control_panel.t("new_area_queued"))
             return
 
         self.scan_active_area(force=True)
@@ -1688,7 +1893,7 @@ class Controller:
 
     def start_translation_job(self, crop_rect, image_bytes, capture_scale):
         self.translation_in_progress = True
-        self.control_panel.set_status("Reading and translating...")
+        self.control_panel.set_status(self.control_panel.t("reading_translating"))
         settings = self.control_panel.current_translation_settings()
 
         worker = Thread(
@@ -2009,17 +2214,21 @@ class Controller:
             if not self.scene_history or self.scene_history[-1] != scene_key:
                 self.scene_history.append(scene_key)
             self.control_panel.set_status(
-                f"Translated | scene history: {len(self.scene_history)}/{SCENE_HISTORY_LIMIT}"
+                self.control_panel.t(
+                    "translated_status",
+                    count=len(self.scene_history),
+                    limit=SCENE_HISTORY_LIMIT,
+                )
             )
         else:
-            self.control_panel.set_status("No text found")
+            self.control_panel.set_status(self.control_panel.t("no_text_found"))
 
         self.comm.translation_ready.emit(regions)
 
     def handle_job_failed(self, message):
         self._last_pixels = None
-        show_error("Translation failed", message)
-        self.control_panel.set_status("Translation failed")
+        show_error(self.control_panel.t("translation_failed"), message)
+        self.control_panel.set_status(self.control_panel.t("translation_failed"))
 
     def handle_job_finished(self):
         self.translation_in_progress = False

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import shutil
 import sys
 from collections import OrderedDict, deque
 from dataclasses import dataclass, field
@@ -33,10 +34,14 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFileDialog,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QSlider,
+    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -47,6 +52,7 @@ APP_NAME = "The Holy Maiden's Quill"
 GOOGLE_CREDENTIALS_ENV = "GOOGLE_APPLICATION_CREDENTIALS"
 LOCAL_CREDENTIALS_NAME = "google_credentials.json"
 LOCAL_CREDENTIALS_PATTERNS = (LOCAL_CREDENTIALS_NAME, "translate-*.json")
+GOOGLE_SERVICE_ACCOUNTS_URL = "https://console.cloud.google.com/iam-admin/serviceaccounts"
 USER_DATA_DIR_NAME = "user_data"
 CREDENTIALS_DIR_NAME = "credentials"
 OVERLAY_MARGIN = 8
@@ -90,6 +96,12 @@ class TranslationSettings:
     target_code: str
     target_name: str
     api_key: str = ""
+
+
+@dataclass(frozen=True)
+class OverlayStyle:
+    font_size: int = 14
+    background_opacity: int = 225
 
 
 class TranslatedRegionParser(HTMLParser):
@@ -154,6 +166,84 @@ def find_local_credentials():
     return None
 
 
+def validate_google_credentials_file(path):
+    data = load_json_file(path, default=None)
+    if not isinstance(data, dict):
+        raise ValueError("ไฟล์นี้ไม่ใช่ JSON credential ที่ถูกต้อง")
+
+    required_fields = ("type", "project_id", "private_key", "client_email")
+    missing_fields = [field for field in required_fields if not data.get(field)]
+    if missing_fields:
+        raise ValueError(
+            "ไฟล์ credential ขาดข้อมูลสำคัญ: " + ", ".join(missing_fields)
+        )
+
+    if data.get("type") != "service_account":
+        raise ValueError("ไฟล์นี้ต้องเป็น Google service account key แบบ JSON")
+
+
+def import_google_credentials_file(source_path):
+    source = Path(source_path)
+    validate_google_credentials_file(source)
+    target = credentials_dir() / LOCAL_CREDENTIALS_NAME
+    shutil.copy2(source, target)
+    os.environ[GOOGLE_CREDENTIALS_ENV] = str(target)
+    logging.info("Imported Google credentials to %s", target)
+    return target
+
+
+def google_credentials_help_text():
+    return (
+        "วิธีเอา google_credentials.json:\n\n"
+        "1. เข้า Google Cloud Console\n"
+        "2. เลือกโปรเจกต์ที่เปิด Billing แล้ว\n"
+        "3. เปิด Cloud Vision API ในโปรเจกต์นั้น\n"
+        "4. ไปที่ IAM & Admin > Service Accounts\n"
+        "5. สร้างหรือเลือก Service Account\n"
+        "6. เข้าแท็บ Keys > Add key > Create new key\n"
+        "7. เลือก JSON แล้วกด Create\n"
+        "8. จะได้ไฟล์ .json ดาวน์โหลดลงเครื่อง ให้นำไฟล์นั้นมา Import ในโปรแกรม\n\n"
+        f"หน้าที่ใช้สร้าง Service Account:\n{GOOGLE_SERVICE_ACCOUNTS_URL}\n\n"
+        "หมายเหตุ: เก็บไฟล์นี้เป็นความลับ ห้ามอัปขึ้น GitHub หรือส่งให้คนอื่น"
+    )
+
+
+def show_google_credentials_help():
+    QMessageBox.information(
+        None,
+        "วิธีเอา google_credentials.json",
+        google_credentials_help_text(),
+    )
+
+
+def import_google_credentials_with_dialog(parent=None):
+    source_path, _ = QFileDialog.getOpenFileName(
+        parent,
+        "เลือกไฟล์ Google service account JSON",
+        str(Path.home() / "Downloads"),
+        "JSON files (*.json);;All files (*.*)",
+    )
+    if not source_path:
+        return False
+
+    try:
+        target = import_google_credentials_file(source_path)
+    except Exception as exc:
+        QMessageBox.critical(
+            parent,
+            "Import credential ไม่สำเร็จ",
+            f"{exc}\n\n{google_credentials_help_text()}",
+        )
+        return False
+
+    QMessageBox.information(
+        parent,
+        "Import credential สำเร็จ",
+        f"นำเข้าไฟล์เรียบร้อยแล้ว:\n{target}\n\nโปรแกรมจะใช้ไฟล์นี้สำหรับ Google Cloud Vision OCR",
+    )
+    return True
+
+
 logging.basicConfig(
     filename=user_data_path("translator.log"),
     level=logging.INFO,
@@ -211,6 +301,14 @@ def save_json_file(path, data):
     with open(temp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
     os.replace(temp_path, path)
+
+
+def clamp_int(value, minimum, maximum, default):
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(maximum, value))
 
 
 def onboarding_state_path():
@@ -838,8 +936,9 @@ def candidate_overlay_rects(source_rect, width, height):
     ]
 
 
-def place_overlay_regions(regions):
-    font = QFont("Segoe UI", 14, QFont.Bold)
+def place_overlay_regions(regions, overlay_style=None):
+    overlay_style = overlay_style or OverlayStyle()
+    font = QFont("Segoe UI", overlay_style.font_size, QFont.Bold)
     source_rects = [region.source_rect for region in regions]
     placed_rects = []
 
@@ -909,6 +1008,13 @@ class FirstRunDialog(QDialog):
         self.checklist_label.setWordWrap(True)
         layout.addWidget(self.checklist_label)
 
+        credential_actions = QHBoxLayout()
+        self.import_credentials_button = QPushButton("Import google_credentials.json")
+        self.credentials_help_button = QPushButton("วิธีเอาไฟล์จาก Google Cloud")
+        credential_actions.addWidget(self.import_credentials_button)
+        credential_actions.addWidget(self.credentials_help_button)
+        layout.addLayout(credential_actions)
+
         self.skip_checkbox = QCheckBox("ไม่ต้องแสดงหน้านี้อีก ถ้าของจำเป็นพร้อมแล้ว")
         layout.addWidget(self.skip_checkbox)
 
@@ -916,6 +1022,8 @@ class FirstRunDialog(QDialog):
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
 
+        self.import_credentials_button.clicked.connect(self.import_credentials)
+        self.credentials_help_button.clicked.connect(show_google_credentials_help)
         self.refresh()
 
     def refresh(self):
@@ -924,8 +1032,16 @@ class FirstRunDialog(QDialog):
     def should_skip_next_time(self):
         return self.skip_checkbox.isChecked()
 
+    def import_credentials(self):
+        if import_google_credentials_with_dialog(self):
+            self.refresh()
+            if hasattr(self.control_panel, "refresh_credentials_status"):
+                self.control_panel.refresh_credentials_status()
+
 
 class ControlPanelWindow(QWidget):
+    overlay_style_changed = pyqtSignal(object)
+
     def __init__(self):
         self.is_loading = True
         super().__init__()
@@ -948,6 +1064,18 @@ class ControlPanelWindow(QWidget):
         self.crop_button.setFont(QFont("Segoe UI", 10, QFont.Bold))
         self.crop_button.setMinimumHeight(40)
         self.layout.addWidget(self.crop_button)
+
+        credential_actions = QHBoxLayout()
+        self.import_credentials_button = QPushButton("Import google_credentials.json")
+        self.credentials_help_button = QPushButton("วิธีเอาไฟล์ Google")
+        credential_actions.addWidget(self.import_credentials_button)
+        credential_actions.addWidget(self.credentials_help_button)
+        self.layout.addLayout(credential_actions)
+
+        self.credentials_status_label = QLabel()
+        self.credentials_status_label.setFont(QFont("Segoe UI", 9))
+        self.credentials_status_label.setWordWrap(True)
+        self.layout.addWidget(self.credentials_status_label)
 
         self.continuous_checkbox = QCheckBox("Continuous mode: watch the latest area")
         self.continuous_checkbox.setFont(QFont("Segoe UI", 10))
@@ -998,6 +1126,26 @@ class ControlPanelWindow(QWidget):
         key_layout.addWidget(self.show_key_checkbox)
         self.settings_layout.addRow("API Key:", key_layout)
 
+        self.overlay_font_size_input = QSpinBox()
+        self.overlay_font_size_input.setRange(9, 32)
+        self.overlay_font_size_input.setSingleStep(1)
+        self.overlay_font_size_input.setValue(14)
+        self.overlay_font_size_input.setSuffix(" px")
+        self.overlay_font_size_input.setFont(QFont("Segoe UI", 10))
+        self.settings_layout.addRow("ขนาดตัวอักษรคำแปล:", self.overlay_font_size_input)
+
+        opacity_layout = QHBoxLayout()
+        self.overlay_opacity_slider = QSlider(Qt.Horizontal)
+        self.overlay_opacity_slider.setRange(20, 100)
+        self.overlay_opacity_slider.setSingleStep(5)
+        self.overlay_opacity_slider.setPageStep(10)
+        self.overlay_opacity_slider.setValue(88)
+        self.overlay_opacity_value_label = QLabel("88%")
+        self.overlay_opacity_value_label.setMinimumWidth(42)
+        opacity_layout.addWidget(self.overlay_opacity_slider)
+        opacity_layout.addWidget(self.overlay_opacity_value_label)
+        self.settings_layout.addRow("ความทึบพื้นหลังคำแปล:", opacity_layout)
+
         self.layout.addWidget(self.settings_widget)
 
         self.status_label = QLabel("Ready")
@@ -1020,7 +1168,13 @@ class ControlPanelWindow(QWidget):
         self.source_lang_combo.currentIndexChanged.connect(self.save_settings)
         self.lang_combo.currentIndexChanged.connect(self.save_settings)
         self.api_key_input.textChanged.connect(self.save_settings)
+        self.overlay_font_size_input.valueChanged.connect(self.save_settings)
+        self.overlay_opacity_slider.valueChanged.connect(self.update_opacity_label)
+        self.overlay_opacity_slider.valueChanged.connect(self.save_settings)
+        self.import_credentials_button.clicked.connect(self.import_credentials)
+        self.credentials_help_button.clicked.connect(show_google_credentials_help)
         self.load_settings()
+        self.refresh_credentials_status()
         self.is_loading = False
 
     def load_settings(self):
@@ -1033,6 +1187,12 @@ class ControlPanelWindow(QWidget):
                     api_key = data.get("gemini_api_key", "")
                     source_lang = data.get("source_lang", "AUTO")
                     target_lang = data.get("target_lang", "TH")
+                    overlay_font_size = clamp_int(
+                        data.get("overlay_font_size", 14), 9, 32, 14
+                    )
+                    overlay_opacity = clamp_int(
+                        data.get("overlay_background_opacity", 88), 20, 100, 88
+                    )
                     
                     if engine == "9arm_qwen":
                         self.engine_combo.setCurrentIndex(1)
@@ -1053,9 +1213,13 @@ class ControlPanelWindow(QWidget):
                     lang_index = self.lang_combo.findText(target_lang)
                     if lang_index >= 0:
                         self.lang_combo.setCurrentIndex(lang_index)
+
+                    self.overlay_font_size_input.setValue(overlay_font_size)
+                    self.overlay_opacity_slider.setValue(overlay_opacity)
             except Exception as e:
                 logging.error(f"Failed to load settings: {e}")
         self.toggle_api_key_visibility()
+        self.update_opacity_label()
 
     def save_settings(self):
         config_path = user_data_path("config.json")
@@ -1075,11 +1239,15 @@ class ControlPanelWindow(QWidget):
         api_key = self.api_key_input.text().strip()
         source_lang = self.source_lang_combo.currentText()
         target_lang = self.lang_combo.currentText()
+        overlay_font_size = self.overlay_font_size_input.value()
+        overlay_opacity = self.overlay_opacity_slider.value()
         data = {
             "engine": engine,
             "gemini_api_key": api_key,
             "source_lang": source_lang,
-            "target_lang": target_lang
+            "target_lang": target_lang,
+            "overlay_font_size": overlay_font_size,
+            "overlay_background_opacity": overlay_opacity,
         }
         try:
             temp_path = config_path.with_suffix(".json.tmp")
@@ -1088,6 +1256,7 @@ class ControlPanelWindow(QWidget):
             os.replace(temp_path, config_path)
             if not getattr(self, "is_loading", False):
                 self.set_status(f"เปลี่ยนระบบแปลภาษาเป็น: {engine_name}")
+                self.overlay_style_changed.emit(self.current_overlay_style())
                 logging.info(f"Engine changed to: {engine_name}")
         except Exception as e:
             logging.error(f"Failed to save settings: {e}")
@@ -1114,6 +1283,37 @@ class ControlPanelWindow(QWidget):
             api_key=self.api_key_input.text().strip(),
         )
 
+    def update_opacity_label(self):
+        self.overlay_opacity_value_label.setText(f"{self.overlay_opacity_slider.value()}%")
+
+    def current_overlay_style(self):
+        opacity_percent = self.overlay_opacity_slider.value()
+        return OverlayStyle(
+            font_size=self.overlay_font_size_input.value(),
+            background_opacity=round(255 * opacity_percent / 100),
+        )
+
+    def refresh_credentials_status(self):
+        credentials_path = os.environ.get(GOOGLE_CREDENTIALS_ENV)
+        local_credentials = find_local_credentials()
+        if credentials_path and Path(credentials_path).exists():
+            active_path = Path(credentials_path)
+        else:
+            active_path = local_credentials
+
+        if active_path:
+            self.credentials_status_label.setText(
+                f"Google credential: พร้อมใช้งาน ({active_path.name})"
+            )
+        else:
+            self.credentials_status_label.setText(
+                "Google credential: ยังไม่ได้ตั้งค่า กด Import google_credentials.json"
+            )
+
+    def import_credentials(self):
+        if import_google_credentials_with_dialog(self):
+            self.refresh_credentials_status()
+
     def add_page_to_log(self, regions):
         if not regions:
             return
@@ -1132,9 +1332,10 @@ class ControlPanelWindow(QWidget):
 
 
 class TextBubbleOverlay(QWidget):
-    def __init__(self, region, parent=None):
+    def __init__(self, region, overlay_style=None, parent=None):
         super().__init__(parent)
         self.region = region
+        self.overlay_style = overlay_style or OverlayStyle()
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -1144,8 +1345,13 @@ class TextBubbleOverlay(QWidget):
         self.drag_position = None
         self.resize_zone = 0
         self.initial_geometry = None
-        self.overlay_font = QFont("Segoe UI", 14, QFont.Bold)
+        self.overlay_font = QFont("Segoe UI", self.overlay_style.font_size, QFont.Bold)
         self.setGeometry(region.overlay_rect)
+
+    def apply_style(self, overlay_style):
+        self.overlay_style = overlay_style
+        self.overlay_font = QFont("Segoe UI", self.overlay_style.font_size, QFont.Bold)
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -1159,7 +1365,7 @@ class TextBubbleOverlay(QWidget):
             -OVERLAY_PADDING,
             -OVERLAY_PADDING,
         )
-        painter.setBrush(QColor(0, 0, 0, 225))
+        painter.setBrush(QColor(0, 0, 0, self.overlay_style.background_opacity))
         painter.setPen(QPen(QColor(255, 255, 255, 100), 1))
         painter.drawRoundedRect(box, 8, 8)
         
@@ -1275,6 +1481,12 @@ class OverlayWindow(QObject):
     def __init__(self):
         super().__init__()
         self.bubbles = []
+        self.overlay_style = OverlayStyle()
+
+    def apply_style(self, overlay_style):
+        self.overlay_style = overlay_style
+        for bubble in self.bubbles:
+            bubble.apply_style(overlay_style)
 
     def update_translations(self, regions):
         # We want to map each new region to a previous bubble to reuse its geometry
@@ -1327,7 +1539,7 @@ class OverlayWindow(QObject):
             if id(region) in new_geometries:
                 region.overlay_rect = new_geometries[id(region)]
             
-            bubble = TextBubbleOverlay(region)
+            bubble = TextBubbleOverlay(region, self.overlay_style)
             bubble.show()
             self.bubbles.append(bubble)
 
@@ -1399,6 +1611,8 @@ class Controller:
         self.control_panel.continuous_checkbox.toggled.connect(
             self.set_continuous_mode
         )
+        self.control_panel.overlay_style_changed.connect(self.overlay.apply_style)
+        self.overlay.apply_style(self.control_panel.current_overlay_style())
         self.continuous_timer.timeout.connect(self.scan_continuous_area)
 
     def trigger_cropping(self):
@@ -1787,7 +2001,10 @@ class Controller:
 
     def handle_job_ready(self, regions):
         if regions:
-            regions = place_overlay_regions(regions)
+            regions = place_overlay_regions(
+                regions,
+                self.control_panel.current_overlay_style(),
+            )
             scene_key = tuple(region.original for region in regions)
             if not self.scene_history or self.scene_history[-1] != scene_key:
                 self.scene_history.append(scene_key)

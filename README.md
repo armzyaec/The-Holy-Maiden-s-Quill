@@ -2,6 +2,8 @@
 
 Windows desktop overlay translator for games and visual novels.
 
+Thanks for this program, friend. @Chistanusorn
+
 ## Languages / ภาษา
 
 - [English Version](#english-version)

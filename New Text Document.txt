@@ -1,8 +1,0 @@
-@echo off
-ECHO Starting Philia Translator...
-
-REM This command runs the Python script using the interpreter from the venv folder.
-venv\Scripts\python.exe main.py
-
-ECHO Program has finished.
-pause

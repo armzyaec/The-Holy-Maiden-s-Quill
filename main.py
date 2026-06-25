@@ -4,11 +4,11 @@ import os
 import sys
 from collections import OrderedDict, deque
 from dataclasses import dataclass, field
-from hashlib import sha256
 from html import escape, unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from threading import Thread
+from typing import Optional
 from unicodedata import category
 
 try:
@@ -19,14 +19,19 @@ except Exception:
 
 import mss
 import mss.tools
-import qdarktheme
+try:
+    import qdarktheme
+except ImportError:
+    qdarktheme = None
 from pynput import keyboard
-from PyQt5.QtCore import QObject, QRect, Qt, QTimer, pyqtSignal, QPoint
+from PyQt5.QtCore import QObject, QRect, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen, QImage
 from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QLabel,
     QLineEdit,
@@ -42,6 +47,8 @@ APP_NAME = "The Holy Maiden's Quill"
 GOOGLE_CREDENTIALS_ENV = "GOOGLE_APPLICATION_CREDENTIALS"
 LOCAL_CREDENTIALS_NAME = "google_credentials.json"
 LOCAL_CREDENTIALS_PATTERNS = (LOCAL_CREDENTIALS_NAME, "translate-*.json")
+USER_DATA_DIR_NAME = "user_data"
+CREDENTIALS_DIR_NAME = "credentials"
 OVERLAY_MARGIN = 8
 OVERLAY_PADDING = 12
 MIN_OVERLAY_WIDTH = 220
@@ -51,8 +58,12 @@ MAX_OVERLAY_HEIGHT = 620
 CONTINUOUS_INTERVAL_MS = 1500
 SCENE_HISTORY_LIMIT = 20
 TRANSLATION_CACHE_LIMIT = 100
+TRANSLATION_TEXT_CACHE_LIMIT = 5000
+TRANSLATION_CACHE_FILE = "translation_cache.json"
+ONBOARDING_STATE_FILE = "onboarding_state.json"
  
 LANG_MAP = {
+    "AUTO": {"code": None, "name": "Auto detect"},
     "TH": {"code": "th", "name": "Thai"},
     "EN": {"code": "en", "name": "English"},
     "JP": {"code": "ja", "name": "Japanese"},
@@ -67,6 +78,18 @@ class TextRegion:
     source_rect: QRect
     translated: str = ""
     overlay_rect: QRect = field(default_factory=QRect)
+
+
+@dataclass(frozen=True)
+class TranslationSettings:
+    engine_index: int
+    engine_name: str
+    source_label: str
+    source_code: Optional[str]
+    source_name: str
+    target_code: str
+    target_name: str
+    api_key: str = ""
 
 
 class TranslatedRegionParser(HTMLParser):
@@ -100,21 +123,39 @@ def app_dir():
     return Path(__file__).resolve().parent
 
 
+def user_data_dir():
+    path = app_dir() / USER_DATA_DIR_NAME
+    path.mkdir(exist_ok=True)
+    return path
+
+
+def credentials_dir():
+    path = user_data_dir() / CREDENTIALS_DIR_NAME
+    path.mkdir(exist_ok=True)
+    return path
+
+
+def user_data_path(name):
+    return user_data_dir() / name
+
+
 def resource_path(name):
     base_path = Path(getattr(sys, "_MEIPASS", app_dir()))
     return base_path / name
 
 
 def find_local_credentials():
-    for pattern in LOCAL_CREDENTIALS_PATTERNS:
-        matches = sorted(app_dir().glob(pattern))
-        if matches:
-            return matches[0]
+    search_dirs = (credentials_dir(), user_data_dir(), app_dir())
+    for directory in search_dirs:
+        for pattern in LOCAL_CREDENTIALS_PATTERNS:
+            matches = sorted(directory.glob(pattern))
+            if matches:
+                return matches[0]
     return None
 
 
 logging.basicConfig(
-    filename=app_dir() / "translator.log",
+    filename=user_data_path("translator.log"),
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
 )
@@ -126,6 +167,107 @@ def show_error(title, message):
         QMessageBox.critical(None, title, message)
     else:
         print(f"{title}: {message}", file=sys.stderr)
+
+
+def app_stylesheet():
+    if qdarktheme:
+        return qdarktheme.load_stylesheet("dark")
+
+    return """
+        QWidget { background-color: #202124; color: #f1f3f4; }
+        QPushButton {
+            background-color: #3c4043;
+            border: 1px solid #5f6368;
+            border-radius: 4px;
+            padding: 8px;
+        }
+        QPushButton:hover { background-color: #4b4f52; }
+        QLineEdit, QTextEdit, QComboBox {
+            background-color: #171717;
+            border: 1px solid #5f6368;
+            border-radius: 4px;
+            padding: 6px;
+        }
+        QCheckBox { spacing: 8px; }
+    """
+
+
+def load_json_file(path, default=None):
+    path = Path(path)
+    if not path.exists():
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        logging.exception("Failed to load JSON file: %s", path)
+        return default
+
+
+def save_json_file(path, data):
+    path = Path(path)
+    path.parent.mkdir(exist_ok=True)
+    temp_path = path.with_suffix(".json.tmp")
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+    os.replace(temp_path, path)
+
+
+def onboarding_state_path():
+    return user_data_path(ONBOARDING_STATE_FILE)
+
+
+def migrate_user_file(filename, target_dir=None):
+    source = app_dir() / filename
+    target = (target_dir or user_data_dir()) / filename
+    if target.exists() or not source.exists():
+        return target
+
+    try:
+        target.parent.mkdir(exist_ok=True)
+        os.replace(source, target)
+        logging.info("Migrated %s to %s", source, target)
+    except Exception:
+        logging.exception("Failed to migrate %s to %s", source, target)
+    return target
+
+
+def migrate_user_files():
+    migrate_user_file("config.json")
+    migrate_user_file(TRANSLATION_CACHE_FILE)
+    migrate_user_file(ONBOARDING_STATE_FILE)
+    migrate_user_file("translator.log")
+    migrate_user_file(LOCAL_CREDENTIALS_NAME, credentials_dir())
+    for credentials_file in app_dir().glob("translate-*.json"):
+        migrate_user_file(credentials_file.name, credentials_dir())
+
+
+def parse_json_array_response(content, expected_length):
+    """Extract a JSON string array from plain or markdown-wrapped model output."""
+    content = (content or "").strip()
+    start_idx = content.find("[")
+    end_idx = content.rfind("]")
+    if start_idx != -1 and end_idx > start_idx:
+        content = content[start_idx:end_idx + 1]
+
+    parsed = json.loads(content)
+    if not isinstance(parsed, list) or len(parsed) != expected_length:
+        raise ValueError("Model response is not a JSON array with the expected length.")
+    return [str(item) for item in parsed]
+
+
+def google_cloud_error_message(exc):
+    message = str(exc)
+    if "Regional Access Boundary" in message or "FAILED_PRECONDITION" in message:
+        return (
+            "Google Cloud Vision OCR failed because the selected credential or project "
+            "is blocked by a Google Cloud precondition/policy. Check that the service "
+            "account belongs to a project with Cloud Vision API enabled, billing enabled, "
+            "and permission to call Vision API. If your organization uses Regional Access "
+            "Boundary or other access policies, create/use a service account that is allowed "
+            "to call Cloud Vision."
+        )
+    return message
 
 
 class GoogleCloudService:
@@ -142,6 +284,13 @@ class GoogleCloudService:
         if not credentials_path and local_credentials:
             credentials_path = str(local_credentials)
             os.environ[GOOGLE_CREDENTIALS_ENV] = credentials_path
+
+        if not credentials_path:
+            raise RuntimeError(
+                "Google Cloud Vision credential is required for OCR. "
+                "Place google_credentials.json or translate-*.json in user_data/credentials, "
+                f"or set {GOOGLE_CREDENTIALS_ENV} to your credential file path."
+            )
 
         if credentials_path and not Path(credentials_path).exists():
             raise RuntimeError(f"Credential file not found: {credentials_path}")
@@ -166,15 +315,26 @@ class GoogleCloudService:
             self._vision_client = vision.ImageAnnotatorClient()
             self._translate_client = translate.Client()
         except Exception as exc:
-            raise RuntimeError(f"Cannot connect to Google Cloud: {exc}") from exc
+            raise RuntimeError(
+                f"Cannot connect to Google Cloud: {google_cloud_error_message(exc)}"
+            ) from exc
 
-    def get_text_regions(self, image_bytes, scale):
+    def get_text_regions(self, image_bytes, scale, source_language=None):
         self._ensure_clients()
         image = self._vision.Image(content=image_bytes)
-        response = self._vision_client.text_detection(
-            image=image,
-            image_context={"language_hints": ["ja"]},
-        )
+        image_context = {}
+        if source_language:
+            image_context["language_hints"] = [source_language]
+
+        try:
+            response = self._vision_client.text_detection(
+                image=image,
+                image_context=image_context or None,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Google Cloud Vision OCR failed: {google_cloud_error_message(exc)}"
+            ) from exc
         if response.error.message:
             raise RuntimeError(response.error.message)
 
@@ -203,15 +363,18 @@ class GoogleCloudService:
             )
         ]
 
-    def translate_text(self, text, target_language="th"):
+    def translate_text(self, text, target_language="th", source_language=None):
         if not text:
             return ""
 
         self._ensure_clients()
-        result = self._translate_client.translate(text, target_language=target_language)
+        kwargs = {"target_language": target_language}
+        if source_language:
+            kwargs["source_language"] = source_language
+        result = self._translate_client.translate(text, **kwargs)
         return unescape(result["translatedText"])
 
-    def translate_batch(self, texts, target_language="th"):
+    def translate_batch(self, texts, target_language="th", source_language=None):
         if not texts:
             return []
 
@@ -221,11 +384,13 @@ class GoogleCloudService:
                 f'<p data-region="{index}">{escape(text)}</p>'
                 for index, text in enumerate(texts)
             )
-            result = self._translate_client.translate(
-                contextual_text,
-                target_language=target_language,
-                format_="html",
-            )
+            translate_kwargs = {
+                "target_language": target_language,
+                "format_": "html",
+            }
+            if source_language:
+                translate_kwargs["source_language"] = source_language
+            result = self._translate_client.translate(contextual_text, **translate_kwargs)
             parser = TranslatedRegionParser()
             parser.feed(result["translatedText"])
             if len(parser.regions) != len(texts):
@@ -237,13 +402,13 @@ class GoogleCloudService:
             )
 
         try:
-            results = self._translate_client.translate(
-                texts,
-                target_language=target_language,
-            )
+            translate_kwargs = {"target_language": target_language}
+            if source_language:
+                translate_kwargs["source_language"] = source_language
+            results = self._translate_client.translate(texts, **translate_kwargs)
         except Exception:
             logging.exception("Independent batch failed. Falling back to single requests.")
-            return [self.translate_text(text, target_language) for text in texts]
+            return [self.translate_text(text, target_language, source_language) for text in texts]
 
         if isinstance(results, dict):
             results = [results]
@@ -276,7 +441,8 @@ def capture_screen_region(rect):
     screen_geometry = screen.geometry()
     scale = screen.devicePixelRatio()
 
-    with mss.mss() as sct:
+    mss_factory = getattr(mss, "MSS", mss.mss)
+    with mss_factory() as sct:
         mss_monitor = (
             sct.monitors[screen_index + 1]
             if screen_index + 1 < len(sct.monitors)
@@ -385,12 +551,148 @@ def keep_rect_visible(rect):
     return rect
 
 
-def contains_japanese(text):
-    # Modified to allow any language (checks if the text contains any letters/alphabets)
+def contains_script(text, source_label):
     for char in text:
-        if category(char).startswith("L"):
-            return True
+        codepoint = ord(char)
+        if source_label == "JP":
+            if (
+                0x3040 <= codepoint <= 0x30FF
+                or 0x3400 <= codepoint <= 0x9FFF
+                or 0xF900 <= codepoint <= 0xFAFF
+            ):
+                return True
+        elif source_label == "KR":
+            if 0xAC00 <= codepoint <= 0xD7AF or 0x1100 <= codepoint <= 0x11FF:
+                return True
+        elif source_label == "CH":
+            if 0x3400 <= codepoint <= 0x9FFF and not contains_script(text, "JP_KANA"):
+                return True
+        elif source_label == "TH":
+            if 0x0E00 <= codepoint <= 0x0E7F:
+                return True
+        elif source_label == "EN":
+            if "A" <= char <= "Z" or "a" <= char <= "z":
+                return True
+        elif source_label == "JP_KANA":
+            if 0x3040 <= codepoint <= 0x30FF:
+                return True
     return False
+
+
+def has_any_letter(text):
+    return any(category(char).startswith("L") for char in text)
+
+
+def should_translate_text(text, settings):
+    if not has_any_letter(text):
+        return False
+    if settings.source_code and settings.source_code == settings.target_code:
+        return False
+    if settings.source_label == "AUTO":
+        return True
+    return contains_script(text, settings.source_label)
+
+
+def translation_text_cache_key(settings, text):
+    return json.dumps(
+        {
+            "engine": settings.engine_index,
+            "source": settings.source_label,
+            "target": settings.target_code,
+            "text": text,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
+def startup_check_items(control_panel):
+    settings = control_panel.current_translation_settings()
+    credentials_path = os.environ.get(GOOGLE_CREDENTIALS_ENV)
+    local_credentials = find_local_credentials()
+    credential_ready = bool(
+        (credentials_path and Path(credentials_path).exists()) or local_credentials
+    )
+
+    api_ready = True
+    api_detail = "ไม่จำเป็นสำหรับ engine นี้"
+    if settings.engine_index in (1, 2, 3):
+        api_ready = bool(settings.api_key)
+        api_detail = "ใส่ API key แล้ว" if api_ready else "ยังไม่ได้ใส่ API key"
+    elif settings.engine_index == 4:
+        api_detail = "ต้องเปิด API Gateway ที่ http://localhost:3000 เอง"
+
+    return [
+        (
+            credential_ready,
+            "Google Cloud Vision credential สำหรับ OCR",
+            "พร้อม" if credential_ready else "วาง google_credentials.json หรือ translate-*.json ใน user_data/credentials",
+        ),
+        (
+            True,
+            "Translation engine",
+            settings.engine_name,
+        ),
+        (
+            api_ready,
+            "API key ของ engine แปล",
+            api_detail,
+        ),
+        (
+            True,
+            "ภาษาต้นทาง / ภาษาปลายทาง",
+            f"{settings.source_label} -> {settings.target_name}",
+        ),
+        (
+            True,
+            "Cache คำแปล",
+            f"จะสร้าง {TRANSLATION_CACHE_FILE} ให้อัตโนมัติ",
+        ),
+        (
+            True,
+            "ปุ่มลัด",
+            "F9 เลือกพื้นที่, Esc ซ่อนคำแปล",
+        ),
+    ]
+
+
+def build_startup_checklist_html(control_panel):
+    rows = []
+    for ok, title, detail in startup_check_items(control_panel):
+        icon = "OK" if ok else "ต้องตั้งค่า"
+        color = "#8fd694" if ok else "#ffb86b"
+        rows.append(
+            f'<p style="margin:6px 0;"><b style="color:{color};">{escape(icon)}</b> '
+            f'<b>{escape(title)}</b><br><span>{escape(detail)}</span></p>'
+        )
+    return "".join(rows)
+
+
+def startup_has_required_items(control_panel):
+    return all(ok for ok, _, _ in startup_check_items(control_panel)[:3])
+
+
+def should_show_onboarding(control_panel):
+    state = load_json_file(onboarding_state_path(), default={}) or {}
+    if not startup_has_required_items(control_panel):
+        return True
+    return not state.get("hide_when_ready", False)
+
+
+def show_onboarding_if_needed(control_panel):
+    if not should_show_onboarding(control_panel):
+        return
+
+    dialog = FirstRunDialog(control_panel, control_panel)
+    dialog.exec_()
+    if dialog.should_skip_next_time() and startup_has_required_items(control_panel):
+        save_json_file(
+            onboarding_state_path(),
+            {
+                "hide_when_ready": True,
+                "version": 1,
+            },
+        )
 
 
 def text_units(text):
@@ -580,6 +882,49 @@ class Communicate(QObject):
     translation_ready = pyqtSignal(object)
 
 
+class FirstRunDialog(QDialog):
+    def __init__(self, control_panel, parent=None):
+        super().__init__(parent)
+        self.control_panel = control_panel
+        self.setWindowTitle("ตรวจความพร้อมก่อนใช้งาน")
+        self.setMinimumWidth(560)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        title = QLabel("สิ่งที่โปรแกรมต้องการก่อนเริ่มแปล")
+        title.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        layout.addWidget(title)
+
+        description = QLabel(
+            "โปรแกรมต้องใช้ Google Cloud Vision สำหรับ OCR อ่านภาพหน้าจอ "
+            "และใช้ engine ที่เลือกไว้สำหรับแปลข้อความ"
+        )
+        description.setWordWrap(True)
+        layout.addWidget(description)
+
+        self.checklist_label = QLabel()
+        self.checklist_label.setTextFormat(Qt.RichText)
+        self.checklist_label.setWordWrap(True)
+        layout.addWidget(self.checklist_label)
+
+        self.skip_checkbox = QCheckBox("ไม่ต้องแสดงหน้านี้อีก ถ้าของจำเป็นพร้อมแล้ว")
+        layout.addWidget(self.skip_checkbox)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+        buttons.accepted.connect(self.accept)
+        layout.addWidget(buttons)
+
+        self.refresh()
+
+    def refresh(self):
+        self.checklist_label.setText(build_startup_checklist_html(self.control_panel))
+
+    def should_skip_next_time(self):
+        return self.skip_checkbox.isChecked()
+
+
 class ControlPanelWindow(QWidget):
     def __init__(self):
         self.is_loading = True
@@ -625,6 +970,11 @@ class ControlPanelWindow(QWidget):
         self.engine_combo.setFont(QFont("Segoe UI", 10))
         self.settings_layout.addRow("ระบบแปลภาษา:", self.engine_combo)
 
+        self.source_lang_combo = QComboBox()
+        self.source_lang_combo.addItems(["AUTO", "JP", "EN", "KR", "CH", "TH"])
+        self.source_lang_combo.setFont(QFont("Segoe UI", 10))
+        self.settings_layout.addRow("ภาษาต้นทาง:", self.source_lang_combo)
+
         self.lang_combo = QComboBox()
         self.lang_combo.addItems(["TH", "EN", "JP", "KR", "CH"])
         self.lang_combo.setFont(QFont("Segoe UI", 10))
@@ -667,19 +1017,21 @@ class ControlPanelWindow(QWidget):
         # Connect settings events and load existing config
         self.engine_combo.currentIndexChanged.connect(self.toggle_api_key_visibility)
         self.engine_combo.currentIndexChanged.connect(self.save_settings)
+        self.source_lang_combo.currentIndexChanged.connect(self.save_settings)
         self.lang_combo.currentIndexChanged.connect(self.save_settings)
         self.api_key_input.textChanged.connect(self.save_settings)
         self.load_settings()
         self.is_loading = False
 
     def load_settings(self):
-        config_path = app_dir() / "config.json"
+        config_path = user_data_path("config.json")
         if config_path.exists():
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     engine = data.get("engine", "google")
                     api_key = data.get("gemini_api_key", "")
+                    source_lang = data.get("source_lang", "AUTO")
                     target_lang = data.get("target_lang", "TH")
                     
                     if engine == "9arm_qwen":
@@ -693,6 +1045,10 @@ class ControlPanelWindow(QWidget):
                     else:
                         self.engine_combo.setCurrentIndex(0)
                     self.api_key_input.setText(api_key)
+
+                    source_index = self.source_lang_combo.findText(source_lang)
+                    if source_index >= 0:
+                        self.source_lang_combo.setCurrentIndex(source_index)
                     
                     lang_index = self.lang_combo.findText(target_lang)
                     if lang_index >= 0:
@@ -702,34 +1058,34 @@ class ControlPanelWindow(QWidget):
         self.toggle_api_key_visibility()
 
     def save_settings(self):
-        config_path = app_dir() / "config.json"
+        config_path = user_data_path("config.json")
         engine_idx = self.engine_combo.currentIndex()
         if engine_idx == 1:
-            engine = "9arm_qwen"
-            engine_name = "9arm API (Qwen3.6)"
+            engine, engine_name = "9arm_qwen", "9arm API (Qwen3.6)"
         elif engine_idx == 2:
-            engine = "9arm_gemma"
-            engine_name = "9arm API (Gemma)"
+            engine, engine_name = "9arm_gemma", "9arm API (Gemma)"
         elif engine_idx == 3:
-            engine = "gemini"
-            engine_name = "Gemini API (Google)"
+            engine, engine_name = "gemini", "Gemini API (Google)"
         elif engine_idx == 4:
-            engine = "api_gateway"
-            engine_name = "API Gateway (Local)"
+            engine, engine_name = "api_gateway", "API Gateway (Local)"
         else:
             engine = "google"
             engine_name = "Google Translate (เดิม)"
             
         api_key = self.api_key_input.text().strip()
+        source_lang = self.source_lang_combo.currentText()
         target_lang = self.lang_combo.currentText()
         data = {
             "engine": engine,
             "gemini_api_key": api_key,
+            "source_lang": source_lang,
             "target_lang": target_lang
         }
         try:
-            with open(config_path, "w", encoding="utf-8") as f:
+            temp_path = config_path.with_suffix(".json.tmp")
+            with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
+            os.replace(temp_path, config_path)
             if not getattr(self, "is_loading", False):
                 self.set_status(f"เปลี่ยนระบบแปลภาษาเป็น: {engine_name}")
                 logging.info(f"Engine changed to: {engine_name}")
@@ -740,6 +1096,23 @@ class ControlPanelWindow(QWidget):
         needs_key = self.engine_combo.currentIndex() in (1, 2, 3)
         self.api_key_input.setEnabled(needs_key)
         self.show_key_checkbox.setEnabled(needs_key)
+
+    def current_translation_settings(self):
+        engine_idx = self.engine_combo.currentIndex()
+        source_lang = self.source_lang_combo.currentText()
+        target_lang = self.lang_combo.currentText()
+        source_info = LANG_MAP.get(source_lang, LANG_MAP["AUTO"])
+        target_info = LANG_MAP.get(target_lang, LANG_MAP["TH"])
+        return TranslationSettings(
+            engine_index=engine_idx,
+            engine_name=self.engine_combo.currentText(),
+            source_label=source_lang,
+            source_code=source_info["code"],
+            source_name=source_info["name"],
+            target_code=target_info["code"],
+            target_name=target_info["name"],
+            api_key=self.api_key_input.text().strip(),
+        )
 
     def add_page_to_log(self, regions):
         if not regions:
@@ -1008,11 +1381,11 @@ class Controller:
         self.crop_window = None
         self.comm = Communicate()
         self.active_crop_rect = None
-        self.last_capture_digest = None
         self.translation_in_progress = False
         self.pending_scan = False
         self.scene_history = deque(maxlen=SCENE_HISTORY_LIMIT)
         self.translation_cache = OrderedDict()
+        self.translation_text_cache = self.load_translation_text_cache()
         self.continuous_timer = QTimer()
         self.continuous_timer.setInterval(CONTINUOUS_INTERVAL_MS)
 
@@ -1059,7 +1432,6 @@ class Controller:
             return
 
         self.active_crop_rect = QRect(crop_rect)
-        self.last_capture_digest = None
         self._last_pixels = None
         if self.translation_in_progress:
             self.pending_scan = True
@@ -1103,17 +1475,22 @@ class Controller:
     def start_translation_job(self, crop_rect, image_bytes, capture_scale):
         self.translation_in_progress = True
         self.control_panel.set_status("Reading and translating...")
+        settings = self.control_panel.current_translation_settings()
 
         worker = Thread(
             target=self.run_translation_job,
-            args=(crop_rect, image_bytes, capture_scale),
+            args=(crop_rect, image_bytes, capture_scale, settings),
             daemon=True,
         )
         worker.start()
 
-    def run_translation_job(self, crop_rect, image_bytes, capture_scale):
+    def run_translation_job(self, crop_rect, image_bytes, capture_scale, settings):
         try:
-            regions = self.google_service.get_text_regions(image_bytes, capture_scale)
+            regions = self.google_service.get_text_regions(
+                image_bytes,
+                capture_scale,
+                settings.source_code,
+            )
             if not regions:
                 logging.info("No text found in selected area.")
                 self.comm.job_ready.emit([])
@@ -1123,47 +1500,61 @@ class Controller:
                 region.source_rect = region.source_rect.translated(crop_rect.topLeft())
 
             scene_key = tuple(region.original for region in regions)
-            translations = self.get_cached_translations(scene_key)
+            translation_key = (
+                settings.engine_index,
+                settings.source_label,
+                settings.target_code,
+                scene_key,
+            )
+            translations = self.get_cached_translations(translation_key)
             if translations is None:
-                # Identify which texts actually need translation (contain Japanese)
+                # Only translate text that matches the selected source language.
                 translated_map = {}
                 to_translate = []
                 for text in scene_key:
-                    if contains_japanese(text):
-                        to_translate.append(text)
+                    if should_translate_text(text, settings):
+                        cached_translation = self.get_cached_text_translation(settings, text)
+                        if cached_translation is not None:
+                            translated_map[text] = cached_translation
+                        elif text not in to_translate:
+                            to_translate.append(text)
                     else:
-                        translated_map[text] = text  # Keep non-Japanese text as-is
+                        translated_map[text] = text
                 
                 if to_translate:
-                    engine_idx = self.control_panel.engine_combo.currentIndex()
-                    target_lang_text = self.control_panel.lang_combo.currentText()
-                    lang_info = LANG_MAP.get(target_lang_text, {"code": "th", "name": "Thai"})
-                    target_code = lang_info["code"]
-                    target_name = lang_info["name"]
+                    engine_idx = settings.engine_index
+                    target_code = settings.target_code
+                    target_name = settings.target_name
                     
                     if engine_idx in (1, 2, 3, 4):
                         if engine_idx in (1, 2, 3):
-                            api_key = self.control_panel.api_key_input.text().strip()
+                            api_key = settings.api_key
                             if not api_key:
                                 raise ValueError("กรุณากรอก API Key ในช่องตั้งค่าการแปลภาษา")
                             
                             if engine_idx == 1:
-                                gemini_results = self.translate_with_custom_api(to_translate, api_key, "qwen3.6-35b-a3b", target_name)
+                                gemini_results = self.translate_with_custom_api(to_translate, api_key, "qwen3.6-35b-a3b", target_name, settings.source_name)
                             elif engine_idx == 2:
-                                gemini_results = self.translate_with_custom_api(to_translate, api_key, "diffusiongemma-26b-a4b", target_name)
+                                gemini_results = self.translate_with_custom_api(to_translate, api_key, "diffusiongemma-26b-a4b", target_name, settings.source_name)
                             elif engine_idx == 3:
-                                gemini_results = self.translate_with_gemini_api(to_translate, api_key, target_name)
+                                gemini_results = self.translate_with_gemini_api(to_translate, api_key, target_name, settings.source_name)
                         elif engine_idx == 4:
                             gemini_results = self.translate_with_api_gateway(to_translate, service="aistudio")
                     else:
-                        gemini_results = self.google_service.translate_batch(to_translate, target_code)
+                        gemini_results = self.google_service.translate_batch(
+                            to_translate,
+                            target_code,
+                            settings.source_code,
+                        )
                     
                     for text, trans in zip(to_translate, gemini_results):
                         translated_map[text] = trans
+                        self.cache_text_translation(settings, text, trans)
+                    self.save_translation_text_cache()
                 
                 # Reconstruct translations list in original order
                 translations = [translated_map[text] for text in scene_key]
-                self.cache_translations(scene_key, translations)
+                self.cache_translations(translation_key, translations)
 
             for region, translated_text in zip(regions, translations):
                 region.translated = translated_text
@@ -1174,12 +1565,15 @@ class Controller:
         finally:
             self.comm.job_finished.emit()
 
-    def translate_with_custom_api(self, texts, api_key, model_name="qwen3.6-35b-a3b", target_name="Thai"):
+    def translate_with_custom_api(self, texts, api_key, model_name="qwen3.6-35b-a3b", target_name="Thai", source_name="Auto detect"):
         import urllib.request
-        import urllib.error
-        
+        source_instruction = (
+            "Detect the source language automatically and translate"
+            if source_name == "Auto detect"
+            else f"Translate from {source_name}"
+        )
         prompt = (
-            f"You are a professional game translator. Translate the following game text into natural, flowing {target_name}.\n"
+            f"You are a professional game translator. {source_instruction} into natural, flowing {target_name}.\n"
             "The translation should match the style of a visual novel/light novel, choosing appropriate pronouns for characters.\n"
             "Maintain the context of the game. Translate the input list and return ONLY a JSON array of strings in the same order.\n"
             f"Input:\n{json.dumps(texts, ensure_ascii=False)}"
@@ -1205,17 +1599,7 @@ class Controller:
                 response_json = json.loads(response_data)
                 content = response_json["choices"][0]["message"]["content"]
             
-            # Find json array in the content (some models wrap it in markdown block)
-            start_idx = content.find('[')
-            end_idx = content.rfind(']') + 1
-            if start_idx != -1 and end_idx != -1:
-                content = content[start_idx:end_idx]
-                
-            translated_list = json.loads(content)
-            if isinstance(translated_list, list) and len(translated_list) == len(texts):
-                return [str(t) for t in translated_list]
-            else:
-                logging.error(f"API returned invalid structure: {content}")
+            return parse_json_array_response(content, len(texts))
         except Exception as e:
             logging.error(f"Failed to parse API response: {e}")
 
@@ -1224,7 +1608,7 @@ class Controller:
         for text in texts:
             try:
                 single_prompt = (
-                    f"Translate the following text into natural {target_name} for a game:\n"
+                    f"{source_instruction} into natural {target_name} for a game:\n"
                     f"{text}"
                 )
                 single_payload = {
@@ -1242,12 +1626,15 @@ class Controller:
                 fallback_translations.append(text)
         return fallback_translations
 
-    def translate_with_gemini_api(self, texts, api_key, target_name="Thai"):
+    def translate_with_gemini_api(self, texts, api_key, target_name="Thai", source_name="Auto detect"):
         import urllib.request
-        import urllib.error
-        
+        source_instruction = (
+            "Detect the source language automatically and translate"
+            if source_name == "Auto detect"
+            else f"Translate from {source_name}"
+        )
         prompt = (
-            f"You are a professional game translator. Translate the following game text into natural, flowing {target_name}.\n"
+            f"You are a professional game translator. {source_instruction} into natural, flowing {target_name}.\n"
             "The translation should match the style of a visual novel/light novel, choosing appropriate pronouns for characters.\n"
             "Maintain the context of the game. Translate the input list and return ONLY a JSON array of strings in the same order.\n"
             f"Input:\n{json.dumps(texts, ensure_ascii=False)}"
@@ -1274,17 +1661,7 @@ class Controller:
                 response_json = json.loads(response_data)
                 content = response_json["candidates"][0]["content"]["parts"][0]["text"]
             
-            # Find json array in the content (some models wrap it in markdown block)
-            start_idx = content.find('[')
-            end_idx = content.rfind(']') + 1
-            if start_idx != -1 and end_idx != -1:
-                content = content[start_idx:end_idx]
-                
-            translated_list = json.loads(content)
-            if isinstance(translated_list, list) and len(translated_list) == len(texts):
-                return [str(t) for t in translated_list]
-            else:
-                logging.error(f"Gemini API returned invalid structure: {content}")
+            return parse_json_array_response(content, len(texts))
         except Exception as e:
             logging.error(f"Failed to parse Gemini API response: {e}")
 
@@ -1293,7 +1670,7 @@ class Controller:
         for text in texts:
             try:
                 single_prompt = (
-                    f"Translate the following text into natural {target_name} for a game:\n"
+                    f"{source_instruction} into natural {target_name} for a game:\n"
                     f"{text}"
                 )
                 single_payload = {
@@ -1316,8 +1693,6 @@ class Controller:
 
     def translate_with_api_gateway(self, texts, service="aistudio"):
         import urllib.request
-        import urllib.error
-        
         url = "http://localhost:3000/api/v1/translations/"
         headers = {
             "Content-Type": "application/json"
@@ -1344,6 +1719,58 @@ class Controller:
                 logging.error(f"API Gateway failed for '{text}': {e}")
                 results.append(text)
         return results
+
+    def load_translation_text_cache(self):
+        cache_path = user_data_path(TRANSLATION_CACHE_FILE)
+        cache = OrderedDict()
+        if not cache_path.exists():
+            return cache
+
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            entries = data.get("entries", {}) if isinstance(data, dict) else {}
+            if isinstance(entries, dict):
+                for key, value in entries.items():
+                    if isinstance(key, str) and isinstance(value, str):
+                        cache[key] = value
+            logging.info("Loaded %s persistent translations.", len(cache))
+        except Exception:
+            logging.exception("Failed to load persistent translation cache.")
+        return cache
+
+    def save_translation_text_cache(self):
+        cache_path = user_data_path(TRANSLATION_CACHE_FILE)
+        try:
+            temp_path = cache_path.with_suffix(".json.tmp")
+            data = {
+                "version": 1,
+                "entries": dict(self.translation_text_cache),
+            }
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(temp_path, cache_path)
+        except Exception:
+            logging.exception("Failed to save persistent translation cache.")
+
+    def get_cached_text_translation(self, settings, text):
+        key = translation_text_cache_key(settings, text)
+        translation = self.translation_text_cache.get(key)
+        if translation is not None:
+            self.translation_text_cache.move_to_end(key)
+            logging.info("Persistent translation cache hit.")
+        return translation
+
+    def cache_text_translation(self, settings, text, translation):
+        if not text or not translation:
+            return
+
+        key = translation_text_cache_key(settings, text)
+        self.translation_text_cache[key] = translation
+        self.translation_text_cache.move_to_end(key)
+        while len(self.translation_text_cache) > TRANSLATION_TEXT_CACHE_LIMIT:
+            self.translation_text_cache.popitem(last=False)
 
     def get_cached_translations(self, scene_key):
         translations = self.translation_cache.get(scene_key)
@@ -1373,7 +1800,6 @@ class Controller:
         self.comm.translation_ready.emit(regions)
 
     def handle_job_failed(self, message):
-        self.last_capture_digest = None
         self._last_pixels = None
         show_error("Translation failed", message)
         self.control_panel.set_status("Translation failed")
@@ -1403,7 +1829,8 @@ def start_hotkey_listener(controller):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyleSheet(qdarktheme.load_stylesheet("dark"))
+    app.setStyleSheet(app_stylesheet())
+    migrate_user_files()
 
     control_panel = ControlPanelWindow()
     overlay = OverlayWindow()
@@ -1417,4 +1844,5 @@ if __name__ == "__main__":
 
     logging.info("%s is ready.", APP_NAME)
     control_panel.show()
+    show_onboarding_if_needed(control_panel)
     sys.exit(app.exec_())

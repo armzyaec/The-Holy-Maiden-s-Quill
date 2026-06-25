@@ -1,6 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
     ['main.py'],
     pathex=[],
@@ -9,10 +8,10 @@ a = Analysis(
     hiddenimports=[
         'mss',
         'pynput',
-        'qdarktheme',
         'google.cloud.vision',
         'google.cloud.translate_v2',
         'google.api_core',
+        'pythainlp',
     ],
     hookspath=[],
     hooksconfig={},

@@ -43,9 +43,6 @@ Source: "build\exe.win-amd64-3.12\Philia Translator.exe"; DestDir: "{app}"; Flag
 ; Libraries and dependency files from cx_Freeze build folder
 Source: "build\exe.win-amd64-3.12\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "Philia Translator.exe"
 
-; Google Translate API credentials file
-Source: "translate-471715-010372f45adf.json"; DestDir: "{app}"; Flags: ignoreversion
-
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
